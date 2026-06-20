@@ -2,174 +2,572 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cost Splitter</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Cost Splitter Pro</title>
     <link rel="manifest" href="manifest.json">
-    <meta name="theme-color" content="#4CAF50">
+    <meta name="theme-color" content="#2563eb">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        :root { --primary: #4CAF50; --bg: #f4f4f9; --text: #333; }
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: var(--bg); color: var(--text); padding: 20px; max-width: 600px; margin: 0 auto; }
-        h1, h2 { text-align: center; color: var(--primary); }
-        .card { background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-bottom: 20px; }
-        button { background: var(--primary); color: white; border: none; padding: 10px 15px; border-radius: 5px; cursor: pointer; font-size: 16px; width: 100%; margin-top: 10px; }
-        button:hover { background: #45a049; }
-        input, select { width: 100%; padding: 10px; margin-top: 8px; margin-bottom: 15px; border: 1px solid #ccc; border-radius: 5px; box-sizing: border-box; }
-        .flex-between { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #eee; padding: 10px 0; }
-        .positive { color: green; font-weight: bold; }
-        .negative { color: red; font-weight: bold; }
-        .tag { background: #eee; padding: 2px 8px; border-radius: 12px; font-size: 12px; }
+        :root { --primary: #2563eb; --bg: #f8fafc; --surface: #ffffff; --text: #1e293b; --border: #e2e8f0; --danger: #ef4444; --success: #22c55e; }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+        body { background: var(--bg); color: var(--text); padding-bottom: 70px; }
+        .container { max-width: 600px; margin: 0 auto; padding: 15px; }
+        header { background: var(--primary); color: white; padding: 15px; text-align: center; position: sticky; top: 0; z-index: 100; box-shadow: 0 2px 4px rgba(0,0,0,0.1); display: flex; justify-content: space-between; align-items: center; }
+        header h1 { font-size: 1.2rem; }
+        .card { background: var(--surface); padding: 15px; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 15px; border: 1px solid var(--border); }
+        input, select, button { width: 100%; padding: 12px; margin-top: 8px; border: 1px solid var(--border); border-radius: 8px; font-size: 16px; }
+        button { background: var(--primary); color: white; border: none; font-weight: 600; cursor: pointer; transition: opacity 0.2s; }
+        button:active { opacity: 0.8; }
+        button.secondary { background: #e2e8f0; color: var(--text); }
+        button.danger { background: var(--danger); }
+        button.small { padding: 6px 12px; width: auto; font-size: 14px; margin-top:0; }
+        .flex-between { display: flex; justify-content: space-between; align-items: center; }
+        .flex-row { display: flex; gap: 10px; align-items: center; }
+        .screen { display: none; }
+        .screen.active { display: block; }
+        .tabs { display: flex; overflow-x: auto; background: var(--surface); border-bottom: 1px solid var(--border); padding: 10px 10px 0; gap: 10px; }
+        .tab { padding: 10px 15px; border-radius: 8px 8px 0 0; background: var(--bg); cursor: pointer; font-weight: 600; color: #64748b; white-space: nowrap; }
+        .tab.active { background: var(--primary); color: white; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        .list-item { padding: 12px 0; border-bottom: 1px solid var(--border); }
+        .list-item:last-child { border-bottom: none; }
+        .amount.positive { color: var(--success); font-weight: bold; }
+        .amount.negative { color: var(--danger); font-weight: bold; }
+        .badge { background: #e2e8f0; padding: 2px 8px; border-radius: 12px; font-size: 0.8rem; }
+        .split-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+        #chart-container { position: relative; height: 250px; width: 100%; margin-top: 20px;}
     </style>
 </head>
 <body>
 
-    <h1>💸 Split Costs</h1>
+    <header>
+        <button class="small secondary" id="btn-back" style="display:none;" onclick="app.showScreen('events')">⬅ Back</button>
+        <h1 id="header-title">💸 Cost Splitter</h1>
+        <div style="width: 60px;"></div> </header>
 
-    <div class="card">
-        <h2>1. Event Details</h2>
-        <select id="scenario">
-            <option value="Home Expenses">Home Expenses 🏠</option>
-            <option value="Travel Trip">Travel Trip ✈️</option>
-            <option value="Weekend Outing">Weekend Outing 🍻</option>
-            <option value="Other">Other 🛒</option>
-        </select>
-    </div>
+    <div class="container">
+        
+        <div id="screen-events" class="screen active">
+            <div class="card">
+                <h3>Create New Event</h3>
+                <input type="text" id="new-evt-name" placeholder="Event Name (e.g., Goa Trip)">
+                <select id="new-evt-type">
+                    <option value="Home Expenses">Home Expenses</option>
+                    <option value="Travel Trip">Travel Trip</option>
+                    <option value="Weekend Outing">Weekend Outing</option>
+                    <option value="Custom">Custom Event</option>
+                </select>
+                <input type="text" id="new-evt-custom" placeholder="Type custom event..." style="display:none;">
+                <select id="new-evt-currency">
+                    <option value="USD">Base Currency: USD</option>
+                    <option value="EUR">Base Currency: EUR</option>
+                    <option value="INR" selected>Base Currency: INR</option>
+                    <option value="GBP">Base Currency: GBP</option>
+                </select>
+                <button onclick="app.createEvent()">Create Event</button>
+            </div>
 
-    <div class="card">
-        <h2>2. Participants</h2>
-        <button onclick="addParticipant()">Add from Contacts / Manual</button>
-        <div id="participants-list"></div>
-    </div>
+            <div class="card">
+                <h3>Your Events</h3>
+                <div id="events-list"><p style="color:#888;">No events yet.</p></div>
+            </div>
+        </div>
 
-    <div class="card">
-        <h2>3. Add Expense</h2>
-        <input type="text" id="desc" placeholder="What was it for? (e.g., Dinner)">
-        <input type="number" id="amount" placeholder="Amount ($)">
-        <select id="payer">
-            <option value="">-- Who Paid? --</option>
-        </select>
-        <button onclick="addExpense()">Add Expense</button>
-    </div>
+        <div id="screen-dashboard" class="screen">
+            
+            <div class="tabs">
+                <div class="tab active" onclick="app.switchTab('expenses')">Expenses</div>
+                <div class="tab" onclick="app.switchTab('balances')">Balances</div>
+                <div class="tab" onclick="app.switchTab('people')">People</div>
+                <div class="tab" onclick="app.switchTab('reports')">Reports</div>
+            </div>
 
-    <div class="card">
-        <h2>Balances</h2>
-        <div id="balances-list"><p style="text-align:center; color:#888;">Add people and expenses to see balances.</p></div>
+            <div class="card">
+                <div id="tab-expenses" class="tab-content active">
+                    <h3>Add Expense</h3>
+                    <select id="exp-category" onchange="app.checkCustomCategory()">
+                        <option value="">-- Select Category --</option>
+                    </select>
+                    <input type="text" id="exp-custom-cat" placeholder="Custom Category" style="display:none;">
+                    <input type="text" id="exp-desc" placeholder="Description (e.g., Dinner at Taj)">
+                    
+                    <div class="flex-row">
+                        <input type="number" id="exp-amount" placeholder="Amount">
+                        <select id="exp-currency" style="width: 100px;">
+                            <option value="USD">USD</option>
+                            <option value="INR" selected>INR</option>
+                            <option value="EUR">EUR</option>
+                        </select>
+                    </div>
+
+                    <select id="exp-payer">
+                        <option value="">-- Who Paid? --</option>
+                    </select>
+
+                    <select id="exp-split-type" onchange="app.renderSplitOptions()">
+                        <option value="equal">Split Equally</option>
+                        <option value="exact">Split by Exact Amounts</option>
+                        <option value="percentage">Split by Percentages</option>
+                    </select>
+                    
+                    <div id="split-options-container" class="split-grid"></div>
+
+                    <button onclick="app.addExpense()">Save Expense</button>
+
+                    <h3 style="margin-top:20px;">Expense History</h3>
+                    <div id="expense-history-list"></div>
+                </div>
+
+                <div id="tab-balances" class="tab-content">
+                    <div class="flex-between">
+                        <h3>Who owes whom?</h3>
+                        <button class="small secondary" onclick="app.exportCSV()">📥 Export CSV</button>
+                    </div>
+                    <p style="font-size: 0.85rem; color: #64748b; margin-bottom: 15px;">Converted to base currency automatically.</p>
+                    <div id="settlements-list"></div>
+
+                    <h3 style="margin-top: 20px;">Settlement History</h3>
+                    <div id="settlement-history-list"></div>
+                </div>
+
+                <div id="tab-people" class="tab-content">
+                    <h3>Add Participants</h3>
+                    <div class="flex-row">
+                        <input type="text" id="new-person" placeholder="Name">
+                        <button class="small" onclick="app.addPerson()" style="width: 80px;">Add</button>
+                    </div>
+                    <button class="secondary" onclick="app.addFromDeviceContacts()" style="margin-top: 10px;">Import from Device Contacts</button>
+                    
+                    <h3 style="margin-top:20px;">Group Members</h3>
+                    <div id="people-list"></div>
+                </div>
+
+                <div id="tab-reports" class="tab-content">
+                    <h3>Spending Breakdown</h3>
+                    <div id="chart-container">
+                        <canvas id="expenseChart"></canvas>
+                    </div>
+                    <div id="report-summary" style="margin-top: 15px; text-align: center; font-weight: bold;"></div>
+                </div>
+
+            </div>
+        </div>
     </div>
 
     <script>
-        let participants = [];
-        let expenses = [];
+        const app = {
+            data: { events: [], currentEventId: null },
+            rates: {},
+            chartInstance: null,
 
-        // Try to use the native Contact Picker API, fallback to manual entry
-        async function addParticipant() {
-            const supported = ('contacts' in navigator && 'ContactsManager' in window);
-            if (supported) {
+            // CATEGORY TEMPLATES
+            categories: {
+                "Home Expenses": ["Rent", "Electricity", "Groceries", "Internet", "Maintenance"],
+                "Travel Trip": ["Flights", "Hotel", "Food", "Transport", "Sightseeing"],
+                "Weekend Outing": ["Drinks", "Dinner", "Movie", "Cab"]
+            },
+
+            async init() {
+                this.loadData();
+                this.fetchRates();
+                this.renderEventsList();
+                
+                // Handle Custom Event Type toggle
+                document.getElementById('new-evt-type').addEventListener('change', (e) => {
+                    document.getElementById('new-evt-custom').style.display = e.target.value === 'Custom' ? 'block' : 'none';
+                });
+            },
+
+            // 1. DATA & SYNC MANAGEMENT
+            loadData() {
+                const stored = localStorage.getItem('costSplitterData');
+                if (stored) {
+                    this.data = JSON.parse(stored);
+                } else {
+                    // Start with an empty state, setting Anshuman as a default user suggestion when creating events
+                    this.data = { events: [], currentEventId: null };
+                }
+            },
+            saveData() {
+                localStorage.setItem('costSplitterData', JSON.stringify(this.data));
+                
+                // FIREBASE SYNC HOOK (Uncomment if Firebase is initialized above)
+                /*
+                if(window.db && this.data.currentEventId) {
+                    const eventData = this.getEvent();
+                    setDoc(doc(window.db, "events", eventData.id), eventData);
+                }
+                */
+            },
+
+            // 12. MULTI CURRENCY
+            async fetchRates() {
                 try {
-                    const contacts = await navigator.contacts.select(['name'], { multiple: true });
-                    contacts.forEach(c => {
-                        if (c.name[0] && !participants.includes(c.name[0])) {
-                            participants.push(c.name[0]);
+                    const res = await fetch('https://open.er-api.com/v6/latest/USD');
+                    const data = await res.json();
+                    this.rates = data.rates;
+                } catch(e) {
+                    console.log("Offline mode: Exchange rates unavailable. Using 1:1.");
+                }
+            },
+            convert(amount, from, to) {
+                if(from === to) return amount;
+                if(!this.rates[from] || !this.rates[to]) return amount; // Fallback for offline
+                const inUSD = amount / this.rates[from];
+                return inUSD * this.rates[to];
+            },
+
+            // 3. EVENT MANAGEMENT
+            createEvent() {
+                const name = document.getElementById('new-evt-name').value.trim();
+                let type = document.getElementById('new-evt-type').value;
+                if(type === 'Custom') type = document.getElementById('new-evt-custom').value.trim();
+                const currency = document.getElementById('new-evt-currency').value;
+
+                if(!name || !type) return alert("Please fill event details.");
+
+                const newEvent = {
+                    id: 'evt_' + Date.now(),
+                    name, type, baseCurrency: currency,
+                    participants: ["Anshuman"], // Default user
+                    expenses: [],
+                    settlements: []
+                };
+
+                this.data.events.unshift(newEvent);
+                this.saveData();
+                this.openEvent(newEvent.id);
+                document.getElementById('new-evt-name').value = '';
+            },
+            getEvent() { return this.data.events.find(e => e.id === this.data.currentEventId); },
+            
+            // NAVIGATION & UI
+            showScreen(screenId) {
+                document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+                document.getElementById(`screen-${screenId}`).classList.add('active');
+                
+                if(screenId === 'events') {
+                    document.getElementById('header-title').innerText = "💸 Cost Splitter";
+                    document.getElementById('btn-back').style.display = "none";
+                    this.data.currentEventId = null;
+                    this.renderEventsList();
+                } else {
+                    const evt = this.getEvent();
+                    document.getElementById('header-title').innerText = evt.name;
+                    document.getElementById('btn-back').style.display = "block";
+                    this.switchTab('expenses');
+                }
+            },
+            openEvent(id) {
+                this.data.currentEventId = id;
+                this.showScreen('dashboard');
+                
+                // FIREBASE LISTENER HOOK (Uncomment to listen for live changes from others)
+                /*
+                if(window.db) {
+                    onSnapshot(doc(window.db, "events", id), (doc) => {
+                        if (doc.exists()) {
+                            const index = this.data.events.findIndex(e => e.id === id);
+                            this.data.events[index] = doc.data();
+                            this.refreshDashboardUI(); // Re-render current tab
                         }
                     });
-                    updateUI();
-                    return;
-                } catch (ex) {
-                    console.log("Contact picker failed or cancelled, falling back.");
                 }
-            }
-            
-            // Fallback for desktop / unsupported browsers
-            const name = prompt("Enter participant's name:");
-            if (name && !participants.includes(name.trim())) {
-                participants.push(name.trim());
-                updateUI();
-            }
-        }
+                */
+            },
+            switchTab(tabId) {
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                
+                event.target.classList.add('active');
+                document.getElementById(`tab-${tabId}`).classList.add('active');
+                this.refreshDashboardUI();
+            },
+            refreshDashboardUI() {
+                this.populateCategoryDropdown();
+                this.renderPeople();
+                this.renderExpenseHistory();
+                this.calculateSettlements();
+                this.renderReports();
+            },
 
-        function updateUI() {
-            // Update Participants List
-            document.getElementById('participants-list').innerHTML = participants.map(p => `<div class="flex-between"><span>👤 ${p}</span></div>`).join('');
-            
-            // Update Payer Dropdown
-            const payerSelect = document.getElementById('payer');
-            payerSelect.innerHTML = '<option value="">-- Who Paid? --</option>' + participants.map(p => `<option value="${p}">${p}</option>`).join('');
-            
-            calculateBalances();
-        }
+            // RENDERERS
+            renderEventsList() {
+                const list = document.getElementById('events-list');
+                if(this.data.events.length === 0) return list.innerHTML = "<p>No events yet.</p>";
+                list.innerHTML = this.data.events.map(e => `
+                    <div class="list-item flex-between" style="cursor:pointer;" onclick="app.openEvent('${e.id}')">
+                        <div>
+                            <strong>${e.name}</strong><br>
+                            <span class="badge">${e.type}</span>
+                        </div>
+                        <div>▶</div>
+                    </div>
+                `).join('');
+            },
 
-        function addExpense() {
-            const desc = document.getElementById('desc').value;
-            const amount = parseFloat(document.getElementById('amount').value);
-            const payer = document.getElementById('payer').value;
-            const scenario = document.getElementById('scenario').value;
+            // 5. CONTACTS & PARTICIPANTS
+            renderPeople() {
+                const evt = this.getEvent();
+                document.getElementById('people-list').innerHTML = evt.participants.map(p => `
+                    <div class="list-item flex-between">
+                        <span>👤 ${p}</span>
+                    </div>
+                `).join('');
 
-            if (!desc || isNaN(amount) || amount <= 0 || !payer) {
-                alert("Please fill in all expense fields correctly.");
-                return;
-            }
+                // Update dropdowns
+                const payerSelect = document.getElementById('exp-payer');
+                payerSelect.innerHTML = '<option value="">-- Who Paid? --</option>' + evt.participants.map(p => `<option value="${p}">${p}</option>`).join('');
+                this.renderSplitOptions();
+            },
+            addPerson() {
+                const name = document.getElementById('new-person').value.trim();
+                const evt = this.getEvent();
+                if(name && !evt.participants.includes(name)) {
+                    evt.participants.push(name);
+                    this.saveData();
+                    this.renderPeople();
+                    document.getElementById('new-person').value = '';
+                }
+            },
+            async addFromDeviceContacts() {
+                if ('contacts' in navigator && 'ContactsManager' in window) {
+                    try {
+                        const contacts = await navigator.contacts.select(['name'], { multiple: true });
+                        const evt = this.getEvent();
+                        contacts.forEach(c => {
+                            if (c.name[0] && !evt.participants.includes(c.name[0])) evt.participants.push(c.name[0]);
+                        });
+                        this.saveData();
+                        this.renderPeople();
+                    } catch (ex) { alert("Contact picker cancelled."); }
+                } else {
+                    alert("Your browser/device doesn't support the native Contact Picker. Please use the manual input above.");
+                }
+            },
 
-            if (participants.length === 0) {
-                alert("Please add participants first!");
-                return;
-            }
+            // 6. DYNAMIC CATEGORIES
+            populateCategoryDropdown() {
+                const evt = this.getEvent();
+                const sel = document.getElementById('exp-category');
+                const defaultCats = this.categories[evt.type] || ["General"];
+                sel.innerHTML = `<option value="">-- Select Category --</option>` + 
+                                defaultCats.map(c => `<option value="${c}">${c}</option>`).join('') +
+                                `<option value="Custom">-- Type your own --</option>`;
+            },
+            checkCustomCategory() {
+                const val = document.getElementById('exp-category').value;
+                document.getElementById('exp-custom-cat').style.display = val === 'Custom' ? 'block' : 'none';
+            },
 
-            expenses.push({ desc, amount, payer, scenario });
-            
-            // Clear inputs
-            document.getElementById('desc').value = '';
-            document.getElementById('amount').value = '';
-            
-            calculateBalances();
-        }
+            // 7. CUSTOM SPLITS
+            renderSplitOptions() {
+                const type = document.getElementById('exp-split-type').value;
+                const container = document.getElementById('split-options-container');
+                const evt = this.getEvent();
+                
+                if(type === 'equal') { container.innerHTML = ''; return; }
 
-        function calculateBalances() {
-            if (participants.length === 0) return;
+                const label = type === 'exact' ? 'Amount' : '%';
+                container.innerHTML = evt.participants.map(p => `
+                    <div>
+                        <label style="font-size:12px;">${p}</label>
+                        <input type="number" class="split-val" data-person="${p}" placeholder="${label}" min="0">
+                    </div>
+                `).join('');
+            },
 
-            // Initialize balances
-            let balances = {};
-            participants.forEach(p => balances[p] = 0);
+            // 3, 8. ADD & DELETE EXPENSES
+            addExpense() {
+                const evt = this.getEvent();
+                const desc = document.getElementById('exp-desc').value.trim();
+                const amount = parseFloat(document.getElementById('exp-amount').value);
+                const currency = document.getElementById('exp-currency').value;
+                let category = document.getElementById('exp-category').value;
+                if(category === 'Custom') category = document.getElementById('exp-custom-cat').value.trim();
+                const payer = document.getElementById('exp-payer').value;
+                const splitType = document.getElementById('exp-split-type').value;
 
-            // Calculate Net balances
-            expenses.forEach(exp => {
-                const splitAmount = exp.amount / participants.length;
-                participants.forEach(p => {
-                    if (p === exp.payer) {
-                        balances[p] += (exp.amount - splitAmount); // Payer gets back their amount minus their own share
-                    } else {
-                        balances[p] -= splitAmount; // Everyone else owes their share
+                if(!desc || isNaN(amount) || !payer || !category) return alert("Fill all required fields.");
+
+                let splits = {};
+                if(splitType === 'equal') {
+                    const share = amount / evt.participants.length;
+                    evt.participants.forEach(p => splits[p] = share);
+                } else {
+                    let total = 0;
+                    document.querySelectorAll('.split-val').forEach(input => {
+                        const val = parseFloat(input.value) || 0;
+                        const p = input.getAttribute('data-person');
+                        if(splitType === 'exact') {
+                            splits[p] = val;
+                            total += val;
+                        } else { // percentage
+                            splits[p] = (val / 100) * amount;
+                            total += val;
+                        }
+                    });
+                    if(splitType === 'exact' && total !== amount) return alert("Exact amounts must sum to total amount.");
+                    if(splitType === 'percentage' && total !== 100) return alert("Percentages must sum to 100.");
+                }
+
+                evt.expenses.push({ id: 'exp_'+Date.now(), desc, amount, currency, category, payer, splits, date: new Date().toISOString() });
+                this.saveData();
+                
+                // Clear form
+                document.getElementById('exp-desc').value = '';
+                document.getElementById('exp-amount').value = '';
+                this.refreshDashboardUI();
+            },
+            deleteExpense(id) {
+                if(!confirm("Delete this expense?")) return;
+                const evt = this.getEvent();
+                evt.expenses = evt.expenses.filter(e => e.id !== id);
+                this.saveData();
+                this.refreshDashboardUI();
+            },
+            renderExpenseHistory() {
+                const evt = this.getEvent();
+                document.getElementById('expense-history-list').innerHTML = evt.expenses.slice().reverse().map(e => `
+                    <div class="list-item">
+                        <div class="flex-between">
+                            <strong>${e.desc}</strong>
+                            <strong>${e.amount.toFixed(2)} ${e.currency}</strong>
+                        </div>
+                        <div class="flex-between" style="font-size: 14px; color: #666; margin-top:5px;">
+                            <span>Paid by ${e.payer} • <span class="badge">${e.category}</span></span>
+                            <button class="small danger" onclick="app.deleteExpense('${e.id}')">Delete</button>
+                        </div>
+                    </div>
+                `).join('');
+            },
+
+            // 9 & 11. SETTLEMENT TRACKING & ALGORITHM
+            calculateSettlements() {
+                const evt = this.getEvent();
+                let balances = {};
+                evt.participants.forEach(p => balances[p] = 0);
+
+                // Add up all expenses (converted to base currency)
+                evt.expenses.forEach(exp => {
+                    const convertedTotal = this.convert(exp.amount, exp.currency, evt.baseCurrency);
+                    const ratio = convertedTotal / exp.amount; // multiplier for splits
+                    
+                    balances[exp.payer] += convertedTotal; // Payer gets credit
+                    for(let person in exp.splits) {
+                        balances[person] -= (exp.splits[person] * ratio); // Everyone gets debit
                     }
                 });
-            });
 
-            // Render Balances
-            const balancesList = document.getElementById('balances-list');
-            if (expenses.length === 0) return;
-
-            let html = '';
-            for (let person in balances) {
-                const bal = balances[person].toFixed(2);
-                if (bal > 0) {
-                    html += `<div class="flex-between"><span>${person}</span> <span class="positive">Gets $${bal}</span></div>`;
-                } else if (bal < 0) {
-                    html += `<div class="flex-between"><span>${person}</span> <span class="negative">Owes $${Math.abs(bal).toFixed(2)}</span></div>`;
-                } else {
-                    html += `<div class="flex-between"><span>${person}</span> <span>Settled up</span></div>`;
-                }
-            }
-            
-            html += `<hr><p style="font-size: 12px; text-align: center;">Total Expenses: $${expenses.reduce((sum, e) => sum + e.amount, 0).toFixed(2)}</p>`;
-            balancesList.innerHTML = html;
-        }
-
-        // Register Service Worker for PWA
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                navigator.serviceWorker.register('./sw.js').then(reg => {
-                    console.log('Service Worker registered!');
-                }).catch(err => {
-                    console.log('Service Worker registration failed: ', err);
+                // Apply existing settlements
+                evt.settlements.forEach(s => {
+                    balances[s.from] += s.amount;
+                    balances[s.to] -= s.amount;
                 });
-            });
-        }
+
+                // Debt Simplification Algorithm
+                let debtors = [], creditors = [];
+                for(let p in balances) {
+                    if(balances[p] > 0.01) creditors.push({p, amt: balances[p]});
+                    if(balances[p] < -0.01) debtors.push({p, amt: Math.abs(balances[p])});
+                }
+
+                let suggestedTransfers = [];
+                let i = 0, j = 0;
+                while(i < debtors.length && j < creditors.length) {
+                    let d = debtors[i], c = creditors[j];
+                    let min = Math.min(d.amt, c.amt);
+                    
+                    suggestedTransfers.push({ from: d.p, to: c.p, amount: min });
+                    
+                    d.amt -= min; c.amt -= min;
+                    if(d.amt === 0) i++;
+                    if(c.amt === 0) j++;
+                }
+
+                // Render
+                const list = document.getElementById('settlements-list');
+                if(suggestedTransfers.length === 0) {
+                    list.innerHTML = "<p style='text-align:center; color: var(--success); font-weight:bold; padding:20px 0;'>All settled up! 🎉</p>";
+                } else {
+                    list.innerHTML = suggestedTransfers.map(t => `
+                        <div class="list-item flex-between">
+                            <span><strong>${t.from}</strong> owes <strong>${t.to}</strong></span>
+                            <div class="flex-row">
+                                <strong class="negative">${t.amount.toFixed(2)} ${evt.baseCurrency}</strong>
+                                <button class="small" onclick="app.markPaid('${t.from}', '${t.to}', ${t.amount})">Mark Paid</button>
+                            </div>
+                        </div>
+                    `).join('');
+                }
+
+                // Render Settlement History
+                document.getElementById('settlement-history-list').innerHTML = evt.settlements.map(s => `
+                    <div class="list-item flex-between" style="font-size:14px; color:#555;">
+                        <span>✅ ${s.from} paid ${s.to}</span>
+                        <span>${s.amount.toFixed(2)} ${evt.baseCurrency}</span>
+                    </div>
+                `).join('');
+            },
+
+            markPaid(from, to, amount) {
+                const evt = this.getEvent();
+                evt.settlements.push({ id: 'set_'+Date.now(), from, to, amount, date: new Date().toISOString() });
+                this.saveData();
+                this.refreshDashboardUI();
+            },
+
+            // 10. EXPORT
+            exportCSV() {
+                const evt = this.getEvent();
+                let csv = "Date,Description,Category,Paid By,Amount,Currency\n";
+                evt.expenses.forEach(e => {
+                    csv += `${new Date(e.date).toLocaleDateString()},${e.desc},${e.category},${e.payer},${e.amount},${e.currency}\n`;
+                });
+                const blob = new Blob([csv], { type: 'text/csv' });
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `${evt.name.replace(/\s+/g, '_')}_expenses.csv`;
+                a.click();
+            },
+
+            // 14. REPORTS
+            renderReports() {
+                const evt = this.getEvent();
+                let categoryTotals = {};
+                let grandTotal = 0;
+
+                evt.expenses.forEach(e => {
+                    const amt = this.convert(e.amount, e.currency, evt.baseCurrency);
+                    categoryTotals[e.category] = (categoryTotals[e.category] || 0) + amt;
+                    grandTotal += amt;
+                });
+
+                document.getElementById('report-summary').innerText = `Total Spend: ${grandTotal.toFixed(2)} ${evt.baseCurrency}`;
+
+                const ctx = document.getElementById('expenseChart');
+                if(this.chartInstance) this.chartInstance.destroy();
+
+                if(Object.keys(categoryTotals).length === 0) return;
+
+                this.chartInstance = new Chart(ctx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: Object.keys(categoryTotals),
+                        datasets: [{
+                            data: Object.values(categoryTotals),
+                            backgroundColor: ['#2563eb', '#3b82f6', '#60a5fa', '#93c5fd', '#bfdbfe', '#22c55e', '#eab308']
+                        }]
+                    },
+                    options: { maintainAspectRatio: false, plugins: { legend: { position: 'right' } } }
+                });
+            }
+        };
+
+        // Initialize on load
+        window.onload = () => app.init();
     </script>
 </body>
 </html>
