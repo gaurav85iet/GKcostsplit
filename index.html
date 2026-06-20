@@ -61,10 +61,12 @@
                     <option value="Custom">Custom Event</option>
                 </select>
                 <input type="text" id="new-evt-custom" placeholder="Type custom event..." style="display:none;">
+                
                 <div class="flex-row">
-    <input type="text" id="new-evt-people" placeholder="Add People (comma separated)">
-    <button class="secondary small" onclick="app.addFromDeviceContactsForNewEvent()" style="width: 50px;" title="Contacts">👥</button>
-</div>
+                    <input type="text" id="new-evt-people" placeholder="Add People (comma separated)">
+                    <button class="secondary small" onclick="app.addFromDeviceContactsForNewEvent()" style="width: 50px;" title="Contacts">👥</button>
+                </div>
+
                 <select id="new-evt-currency">
                     <option value="USD">Base Currency: USD</option>
                     <option value="EUR">Base Currency: EUR</option>
@@ -155,23 +157,12 @@
         </div>
     </div>
 
-    <script type="module">
-        /*
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-        import { getFirestore, doc, onSnapshot, setDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
-        const firebaseConfig = { ... };
-        const appInfo = initializeApp(firebaseConfig);
-        window.db = getFirestore(appInfo);
-        */
-    </script>
-
     <script>
         const app = {
             data: { events: [], currentEventId: null },
             rates: {},
             chartInstance: null,
 
-            // UPDATED CATEGORY TEMPLATES
             categories: {
                 "Home Expenses": ["Rent", "Electricity", "Groceries", "Internet", "Maintenance", "Water"],
                 "Travel Trip": ["Flights", "Hotel", "Food", "Transport", "Sightseeing"],
@@ -210,6 +201,29 @@
                 document.getElementById('new-evt-custom').style.display = val === 'Custom' ? 'block' : 'none';
             },
 
+            async addFromDeviceContactsForNewEvent() {
+                if ('contacts' in navigator && 'ContactsManager' in window) {
+                    try {
+                        const contacts = await navigator.contacts.select(['name'], { multiple: true });
+                        const input = document.getElementById('new-evt-people');
+                        
+                        let currentNames = input.value ? input.value.split(',').map(n => n.trim()).filter(n => n) : [];
+                        
+                        contacts.forEach(c => {
+                            if (c.name[0] && !currentNames.includes(c.name[0])) {
+                                currentNames.push(c.name[0]);
+                            }
+                        });
+                        
+                        input.value = currentNames.join(', ');
+                    } catch (ex) {
+                        // User cancelled
+                    }
+                } else {
+                    alert("Contact Picker not supported on this device/browser. Please type names manually.");
+                }
+            },
+
             createEvent() {
                 const name = document.getElementById('new-evt-name').value.trim();
                 let type = document.getElementById('new-evt-type').value;
@@ -219,7 +233,6 @@
 
                 if(!name || !type) return alert("Please fill event details.");
 
-                // Process initial people
                 let participants = [];
                 if (peopleRaw) {
                     participants = peopleRaw.split(',').map(p => p.trim()).filter(p => p);
@@ -237,7 +250,6 @@
                 this.saveData();
                 this.openEvent(newEvent.id);
                 
-                // Clear form
                 document.getElementById('new-evt-name').value = '';
                 document.getElementById('new-evt-people').value = '';
             },
@@ -326,7 +338,6 @@
             },
             deletePerson(name) {
                 const evt = this.getEvent();
-                // Check if person is involved in any expenses before deleting
                 const isInvolved = evt.expenses.some(e => e.payer === name || e.splits[name] !== undefined);
                 if (isInvolved) {
                     alert("Cannot delete this person because they are tied to an existing expense. Delete the expense first.");
@@ -354,33 +365,6 @@
                     alert("Contact Picker not supported. Please add manually.");
                 }
             },
-
-                        async addFromDeviceContactsForNewEvent() {
-                if ('contacts' in navigator && 'ContactsManager' in window) {
-                    try {
-                        const contacts = await navigator.contacts.select(['name'], { multiple: true });
-                        const input = document.getElementById('new-evt-people');
-                        
-                        // Get current names in the box, split them into an array, clean up spaces
-                        let currentNames = input.value ? input.value.split(',').map(n => n.trim()).filter(n => n) : [];
-                        
-                        // Add new contacts if they aren't already in the list
-                        contacts.forEach(c => {
-                            if (c.name[0] && !currentNames.includes(c.name[0])) {
-                                currentNames.push(c.name[0]);
-                            }
-                        });
-                        
-                        // Put the comma-separated list back into the input box
-                        input.value = currentNames.join(', ');
-                    } catch (ex) {
-                        // User cancelled
-                    }
-                } else {
-                    alert("Contact Picker not supported on this device/browser. Please type names manually.");
-                }
-            },
-
 
             populateCategoryDropdown() {
                 const evt = this.getEvent();
