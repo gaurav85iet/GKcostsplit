@@ -61,7 +61,10 @@
                     <option value="Custom">Custom Event</option>
                 </select>
                 <input type="text" id="new-evt-custom" placeholder="Type custom event..." style="display:none;">
-                <input type="text" id="new-evt-people" placeholder="Add People (comma separated, e.g. John, Sarah)">
+                <div class="flex-row">
+    <input type="text" id="new-evt-people" placeholder="Add People (comma separated)">
+    <button class="secondary small" onclick="app.addFromDeviceContactsForNewEvent()" style="width: 50px;" title="Contacts">👥</button>
+</div>
                 <select id="new-evt-currency">
                     <option value="USD">Base Currency: USD</option>
                     <option value="EUR">Base Currency: EUR</option>
@@ -351,6 +354,33 @@
                     alert("Contact Picker not supported. Please add manually.");
                 }
             },
+
+                        async addFromDeviceContactsForNewEvent() {
+                if ('contacts' in navigator && 'ContactsManager' in window) {
+                    try {
+                        const contacts = await navigator.contacts.select(['name'], { multiple: true });
+                        const input = document.getElementById('new-evt-people');
+                        
+                        // Get current names in the box, split them into an array, clean up spaces
+                        let currentNames = input.value ? input.value.split(',').map(n => n.trim()).filter(n => n) : [];
+                        
+                        // Add new contacts if they aren't already in the list
+                        contacts.forEach(c => {
+                            if (c.name[0] && !currentNames.includes(c.name[0])) {
+                                currentNames.push(c.name[0]);
+                            }
+                        });
+                        
+                        // Put the comma-separated list back into the input box
+                        input.value = currentNames.join(', ');
+                    } catch (ex) {
+                        // User cancelled
+                    }
+                } else {
+                    alert("Contact Picker not supported on this device/browser. Please type names manually.");
+                }
+            },
+
 
             populateCategoryDropdown() {
                 const evt = this.getEvent();
