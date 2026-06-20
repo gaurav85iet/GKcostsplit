@@ -1,0 +1,8 @@
+{
+  "name": "GK Cost Split V3",
+  "short_name": "GKSplit",
+  "display": "standalone",
+  "start_url": "./",
+  "theme_color": "#2563eb",
+  "background_color": "#ffffff"
+}
