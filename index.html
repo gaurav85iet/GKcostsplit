@@ -19,7 +19,7 @@
         button { background: var(--primary); color: white; border: none; font-weight: 600; cursor: pointer; transition: opacity 0.2s; }
         button:active { opacity: 0.8; }
         button.secondary { background: #e2e8f0; color: var(--text); }
-        button.danger { background: var(--danger); }
+        button.danger { background: var(--danger); color: white; }
         button.small { padding: 6px 12px; width: auto; font-size: 14px; margin-top:0; }
         .flex-between { display: flex; justify-content: space-between; align-items: center; }
         .flex-row { display: flex; gap: 10px; align-items: center; }
@@ -44,7 +44,8 @@
     <header>
         <button class="small secondary" id="btn-back" style="display:none;" onclick="app.showScreen('events')">⬅ Back</button>
         <h1 id="header-title">💸 Cost Splitter</h1>
-        <div style="width: 60px;"></div> </header>
+        <div style="width: 60px;"></div>
+    </header>
 
     <div class="container">
         
@@ -52,13 +53,15 @@
             <div class="card">
                 <h3>Create New Event</h3>
                 <input type="text" id="new-evt-name" placeholder="Event Name (e.g., Goa Trip)">
-                <select id="new-evt-type">
+                <select id="new-evt-type" onchange="app.checkCustomEventType()">
                     <option value="Home Expenses">Home Expenses</option>
                     <option value="Travel Trip">Travel Trip</option>
-                    <option value="Weekend Outing">Weekend Outing</option>
+                    <option value="Dining Out">Dining Out</option>
+                    <option value="Movies/Concerts">Movies/Concerts</option>
                     <option value="Custom">Custom Event</option>
                 </select>
                 <input type="text" id="new-evt-custom" placeholder="Type custom event..." style="display:none;">
+                <input type="text" id="new-evt-people" placeholder="Add People (comma separated, e.g. John, Sarah)">
                 <select id="new-evt-currency">
                     <option value="USD">Base Currency: USD</option>
                     <option value="EUR">Base Currency: EUR</option>
@@ -87,10 +90,9 @@
                 <div id="tab-expenses" class="tab-content active">
                     <h3>Add Expense</h3>
                     <select id="exp-category" onchange="app.checkCustomCategory()">
-                        <option value="">-- Select Category --</option>
+                        <option value="">-- Select Expense Type --</option>
                     </select>
-                    <input type="text" id="exp-custom-cat" placeholder="Custom Category" style="display:none;">
-                    <input type="text" id="exp-desc" placeholder="Description (e.g., Dinner at Taj)">
+                    <input type="text" id="exp-custom-cat" placeholder="Type custom expense..." style="display:none;">
                     
                     <div class="flex-row">
                         <input type="number" id="exp-amount" placeholder="Amount">
@@ -124,9 +126,7 @@
                         <h3>Who owes whom?</h3>
                         <button class="small secondary" onclick="app.exportCSV()">📥 Export CSV</button>
                     </div>
-                    <p style="font-size: 0.85rem; color: #64748b; margin-bottom: 15px;">Converted to base currency automatically.</p>
                     <div id="settlements-list"></div>
-
                     <h3 style="margin-top: 20px;">Settlement History</h3>
                     <div id="settlement-history-list"></div>
                 </div>
@@ -145,15 +145,22 @@
 
                 <div id="tab-reports" class="tab-content">
                     <h3>Spending Breakdown</h3>
-                    <div id="chart-container">
-                        <canvas id="expenseChart"></canvas>
-                    </div>
+                    <div id="chart-container"><canvas id="expenseChart"></canvas></div>
                     <div id="report-summary" style="margin-top: 15px; text-align: center; font-weight: bold;"></div>
                 </div>
-
             </div>
         </div>
     </div>
+
+    <script type="module">
+        /*
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+        import { getFirestore, doc, onSnapshot, setDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+        const firebaseConfig = { ... };
+        const appInfo = initializeApp(firebaseConfig);
+        window.db = getFirestore(appInfo);
+        */
+    </script>
 
     <script>
         const app = {
@@ -161,76 +168,64 @@
             rates: {},
             chartInstance: null,
 
-            // CATEGORY TEMPLATES
+            // UPDATED CATEGORY TEMPLATES
             categories: {
-                "Home Expenses": ["Rent", "Electricity", "Groceries", "Internet", "Maintenance"],
+                "Home Expenses": ["Rent", "Electricity", "Groceries", "Internet", "Maintenance", "Water"],
                 "Travel Trip": ["Flights", "Hotel", "Food", "Transport", "Sightseeing"],
-                "Weekend Outing": ["Drinks", "Dinner", "Movie", "Cab"]
+                "Dining Out": ["Restaurant", "Cafe", "Drinks", "Fast Food"],
+                "Movies/Concerts": ["Tickets", "Snacks", "Merchandise"]
             },
 
             async init() {
                 this.loadData();
                 this.fetchRates();
                 this.renderEventsList();
-                
-                // Handle Custom Event Type toggle
-                document.getElementById('new-evt-type').addEventListener('change', (e) => {
-                    document.getElementById('new-evt-custom').style.display = e.target.value === 'Custom' ? 'block' : 'none';
-                });
             },
 
-            // 1. DATA & SYNC MANAGEMENT
             loadData() {
                 const stored = localStorage.getItem('costSplitterData');
-                if (stored) {
-                    this.data = JSON.parse(stored);
-                } else {
-                    // Start with an empty state, setting Anshuman as a default user suggestion when creating events
-                    this.data = { events: [], currentEventId: null };
-                }
+                if (stored) this.data = JSON.parse(stored);
             },
             saveData() {
                 localStorage.setItem('costSplitterData', JSON.stringify(this.data));
-                
-                // FIREBASE SYNC HOOK (Uncomment if Firebase is initialized above)
-                /*
-                if(window.db && this.data.currentEventId) {
-                    const eventData = this.getEvent();
-                    setDoc(doc(window.db, "events", eventData.id), eventData);
-                }
-                */
             },
 
-            // 12. MULTI CURRENCY
             async fetchRates() {
                 try {
                     const res = await fetch('https://open.er-api.com/v6/latest/USD');
                     const data = await res.json();
                     this.rates = data.rates;
-                } catch(e) {
-                    console.log("Offline mode: Exchange rates unavailable. Using 1:1.");
-                }
+                } catch(e) { console.log("Offline mode: Exchange rates unavailable."); }
             },
             convert(amount, from, to) {
-                if(from === to) return amount;
-                if(!this.rates[from] || !this.rates[to]) return amount; // Fallback for offline
-                const inUSD = amount / this.rates[from];
-                return inUSD * this.rates[to];
+                if(from === to || !this.rates[from] || !this.rates[to]) return amount; 
+                return (amount / this.rates[from]) * this.rates[to];
             },
 
-            // 3. EVENT MANAGEMENT
+            checkCustomEventType() {
+                const val = document.getElementById('new-evt-type').value;
+                document.getElementById('new-evt-custom').style.display = val === 'Custom' ? 'block' : 'none';
+            },
+
             createEvent() {
                 const name = document.getElementById('new-evt-name').value.trim();
                 let type = document.getElementById('new-evt-type').value;
                 if(type === 'Custom') type = document.getElementById('new-evt-custom').value.trim();
                 const currency = document.getElementById('new-evt-currency').value;
+                const peopleRaw = document.getElementById('new-evt-people').value.trim();
 
                 if(!name || !type) return alert("Please fill event details.");
+
+                // Process initial people
+                let participants = [];
+                if (peopleRaw) {
+                    participants = peopleRaw.split(',').map(p => p.trim()).filter(p => p);
+                }
 
                 const newEvent = {
                     id: 'evt_' + Date.now(),
                     name, type, baseCurrency: currency,
-                    participants: ["Anshuman"], // Default user
+                    participants: participants,
                     expenses: [],
                     settlements: []
                 };
@@ -238,11 +233,21 @@
                 this.data.events.unshift(newEvent);
                 this.saveData();
                 this.openEvent(newEvent.id);
+                
+                // Clear form
                 document.getElementById('new-evt-name').value = '';
+                document.getElementById('new-evt-people').value = '';
             },
+
+            deleteEvent(id) {
+                if(!confirm("Are you sure you want to delete this entire event?")) return;
+                this.data.events = this.data.events.filter(e => e.id !== id);
+                this.saveData();
+                this.renderEventsList();
+            },
+
             getEvent() { return this.data.events.find(e => e.id === this.data.currentEventId); },
             
-            // NAVIGATION & UI
             showScreen(screenId) {
                 document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
                 document.getElementById(`screen-${screenId}`).classList.add('active');
@@ -262,19 +267,6 @@
             openEvent(id) {
                 this.data.currentEventId = id;
                 this.showScreen('dashboard');
-                
-                // FIREBASE LISTENER HOOK (Uncomment to listen for live changes from others)
-                /*
-                if(window.db) {
-                    onSnapshot(doc(window.db, "events", id), (doc) => {
-                        if (doc.exists()) {
-                            const index = this.data.events.findIndex(e => e.id === id);
-                            this.data.events[index] = doc.data();
-                            this.refreshDashboardUI(); // Re-render current tab
-                        }
-                    });
-                }
-                */
             },
             switchTab(tabId) {
                 document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
@@ -292,7 +284,6 @@
                 this.renderReports();
             },
 
-            // RENDERERS
             renderEventsList() {
                 const list = document.getElementById('events-list');
                 if(this.data.events.length === 0) return list.innerHTML = "<p>No events yet.</p>";
@@ -302,21 +293,20 @@
                             <strong>${e.name}</strong><br>
                             <span class="badge">${e.type}</span>
                         </div>
-                        <div>▶</div>
+                        <button class="small danger" onclick="event.stopPropagation(); app.deleteEvent('${e.id}')">Delete</button>
                     </div>
                 `).join('');
             },
 
-            // 5. CONTACTS & PARTICIPANTS
             renderPeople() {
                 const evt = this.getEvent();
                 document.getElementById('people-list').innerHTML = evt.participants.map(p => `
                     <div class="list-item flex-between">
                         <span>👤 ${p}</span>
+                        <button class="small danger" onclick="app.deletePerson('${p}')">X</button>
                     </div>
                 `).join('');
 
-                // Update dropdowns
                 const payerSelect = document.getElementById('exp-payer');
                 payerSelect.innerHTML = '<option value="">-- Who Paid? --</option>' + evt.participants.map(p => `<option value="${p}">${p}</option>`).join('');
                 this.renderSplitOptions();
@@ -331,6 +321,21 @@
                     document.getElementById('new-person').value = '';
                 }
             },
+            deletePerson(name) {
+                const evt = this.getEvent();
+                // Check if person is involved in any expenses before deleting
+                const isInvolved = evt.expenses.some(e => e.payer === name || e.splits[name] !== undefined);
+                if (isInvolved) {
+                    alert("Cannot delete this person because they are tied to an existing expense. Delete the expense first.");
+                    return;
+                }
+                
+                if(!confirm(`Remove ${name} from the group?`)) return;
+                evt.participants = evt.participants.filter(p => p !== name);
+                this.saveData();
+                this.renderPeople();
+            },
+
             async addFromDeviceContacts() {
                 if ('contacts' in navigator && 'ContactsManager' in window) {
                     try {
@@ -341,18 +346,17 @@
                         });
                         this.saveData();
                         this.renderPeople();
-                    } catch (ex) { alert("Contact picker cancelled."); }
+                    } catch (ex) {}
                 } else {
-                    alert("Your browser/device doesn't support the native Contact Picker. Please use the manual input above.");
+                    alert("Contact Picker not supported. Please add manually.");
                 }
             },
 
-            // 6. DYNAMIC CATEGORIES
             populateCategoryDropdown() {
                 const evt = this.getEvent();
                 const sel = document.getElementById('exp-category');
                 const defaultCats = this.categories[evt.type] || ["General"];
-                sel.innerHTML = `<option value="">-- Select Category --</option>` + 
+                sel.innerHTML = `<option value="">-- Select Expense Type --</option>` + 
                                 defaultCats.map(c => `<option value="${c}">${c}</option>`).join('') +
                                 `<option value="Custom">-- Type your own --</option>`;
             },
@@ -361,7 +365,6 @@
                 document.getElementById('exp-custom-cat').style.display = val === 'Custom' ? 'block' : 'none';
             },
 
-            // 7. CUSTOM SPLITS
             renderSplitOptions() {
                 const type = document.getElementById('exp-split-type').value;
                 const container = document.getElementById('split-options-container');
@@ -378,10 +381,8 @@
                 `).join('');
             },
 
-            // 3, 8. ADD & DELETE EXPENSES
             addExpense() {
                 const evt = this.getEvent();
-                const desc = document.getElementById('exp-desc').value.trim();
                 const amount = parseFloat(document.getElementById('exp-amount').value);
                 const currency = document.getElementById('exp-currency').value;
                 let category = document.getElementById('exp-category').value;
@@ -389,7 +390,8 @@
                 const payer = document.getElementById('exp-payer').value;
                 const splitType = document.getElementById('exp-split-type').value;
 
-                if(!desc || isNaN(amount) || !payer || !category) return alert("Fill all required fields.");
+                if(evt.participants.length === 0) return alert("Please add people first!");
+                if(isNaN(amount) || !payer || !category) return alert("Fill all required fields.");
 
                 let splits = {};
                 if(splitType === 'equal') {
@@ -403,7 +405,7 @@
                         if(splitType === 'exact') {
                             splits[p] = val;
                             total += val;
-                        } else { // percentage
+                        } else { 
                             splits[p] = (val / 100) * amount;
                             total += val;
                         }
@@ -412,11 +414,9 @@
                     if(splitType === 'percentage' && total !== 100) return alert("Percentages must sum to 100.");
                 }
 
-                evt.expenses.push({ id: 'exp_'+Date.now(), desc, amount, currency, category, payer, splits, date: new Date().toISOString() });
+                evt.expenses.push({ id: 'exp_'+Date.now(), amount, currency, category, payer, splits, date: new Date().toISOString() });
                 this.saveData();
                 
-                // Clear form
-                document.getElementById('exp-desc').value = '';
                 document.getElementById('exp-amount').value = '';
                 this.refreshDashboardUI();
             },
@@ -432,41 +432,39 @@
                 document.getElementById('expense-history-list').innerHTML = evt.expenses.slice().reverse().map(e => `
                     <div class="list-item">
                         <div class="flex-between">
-                            <strong>${e.desc}</strong>
+                            <strong>${e.category}</strong>
                             <strong>${e.amount.toFixed(2)} ${e.currency}</strong>
                         </div>
                         <div class="flex-between" style="font-size: 14px; color: #666; margin-top:5px;">
-                            <span>Paid by ${e.payer} • <span class="badge">${e.category}</span></span>
+                            <span>Paid by ${e.payer}</span>
                             <button class="small danger" onclick="app.deleteExpense('${e.id}')">Delete</button>
                         </div>
                     </div>
                 `).join('');
             },
 
-            // 9 & 11. SETTLEMENT TRACKING & ALGORITHM
             calculateSettlements() {
                 const evt = this.getEvent();
                 let balances = {};
                 evt.participants.forEach(p => balances[p] = 0);
 
-                // Add up all expenses (converted to base currency)
                 evt.expenses.forEach(exp => {
                     const convertedTotal = this.convert(exp.amount, exp.currency, evt.baseCurrency);
-                    const ratio = convertedTotal / exp.amount; // multiplier for splits
+                    const ratio = convertedTotal / exp.amount; 
                     
-                    balances[exp.payer] += convertedTotal; // Payer gets credit
+                    balances[exp.payer] += convertedTotal; 
                     for(let person in exp.splits) {
-                        balances[person] -= (exp.splits[person] * ratio); // Everyone gets debit
+                        if(balances[person] !== undefined) {
+                            balances[person] -= (exp.splits[person] * ratio);
+                        }
                     }
                 });
 
-                // Apply existing settlements
                 evt.settlements.forEach(s => {
                     balances[s.from] += s.amount;
                     balances[s.to] -= s.amount;
                 });
 
-                // Debt Simplification Algorithm
                 let debtors = [], creditors = [];
                 for(let p in balances) {
                     if(balances[p] > 0.01) creditors.push({p, amt: balances[p]});
@@ -486,7 +484,6 @@
                     if(c.amt === 0) j++;
                 }
 
-                // Render
                 const list = document.getElementById('settlements-list');
                 if(suggestedTransfers.length === 0) {
                     list.innerHTML = "<p style='text-align:center; color: var(--success); font-weight:bold; padding:20px 0;'>All settled up! 🎉</p>";
@@ -502,7 +499,6 @@
                     `).join('');
                 }
 
-                // Render Settlement History
                 document.getElementById('settlement-history-list').innerHTML = evt.settlements.map(s => `
                     <div class="list-item flex-between" style="font-size:14px; color:#555;">
                         <span>✅ ${s.from} paid ${s.to}</span>
@@ -518,12 +514,11 @@
                 this.refreshDashboardUI();
             },
 
-            // 10. EXPORT
             exportCSV() {
                 const evt = this.getEvent();
-                let csv = "Date,Description,Category,Paid By,Amount,Currency\n";
+                let csv = "Date,Category,Paid By,Amount,Currency\n";
                 evt.expenses.forEach(e => {
-                    csv += `${new Date(e.date).toLocaleDateString()},${e.desc},${e.category},${e.payer},${e.amount},${e.currency}\n`;
+                    csv += `${new Date(e.date).toLocaleDateString()},${e.category},${e.payer},${e.amount},${e.currency}\n`;
                 });
                 const blob = new Blob([csv], { type: 'text/csv' });
                 const url = window.URL.createObjectURL(blob);
@@ -533,7 +528,6 @@
                 a.click();
             },
 
-            // 14. REPORTS
             renderReports() {
                 const evt = this.getEvent();
                 let categoryTotals = {};
@@ -566,8 +560,12 @@
             }
         };
 
-        // Initialize on load
-        window.onload = () => app.init();
+        window.onload = () => {
+            app.init();
+            if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.register('./sw.js');
+            }
+        };
     </script>
 </body>
 </html>
